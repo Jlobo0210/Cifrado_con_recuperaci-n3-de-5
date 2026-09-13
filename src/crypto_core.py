@@ -90,7 +90,7 @@ def decrypt_blob(key: bytes, blob: bytes, backup_id: bytes) -> bytes:
         key: la misma clave de 32 bytes usada al cifrar.
         blob: el blob binario completo.
         backup_id: el MISMO backup_id (16 bytes crudos) usado al cifrar.
-            Normalmente se obtiene del manifiesto (Persona C).
+            Normalmente se obtiene del manifiesto.
 
     Returns:
         El plaintext original.
