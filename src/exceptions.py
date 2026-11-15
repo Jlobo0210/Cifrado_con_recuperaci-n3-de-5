@@ -48,3 +48,16 @@ class PayloadTooLargeError(EnvelopeError, ValueError):
     Hereda también de ValueError por la misma razón que
     InvalidBlobFormatError.
     """
+
+class ExtractionError(EnvelopeError):
+    """
+    El payload descifrado no pudo extraerse de forma segura: el tar/gzip
+    está dañado, contiene rutas peligrosas (absolutas, "..", enlaces que
+    salen del destino, dispositivos) o la extracción sobrescribiría
+    archivos que ya existen en el destino.
+
+    Solo puede ocurrir DESPUÉS de una verificación AEAD exitosa, así que
+    en la práctica indica un respaldo creado con contenido problemático o
+    un destino ocupado, no una manipulación del paquete (esa la detecta
+    AEAD antes). Cuando se lanza, el directorio destino queda sin cambios.
+    """

@@ -10,9 +10,12 @@ from __future__ import annotations
 
 import io
 import os
+import shutil
 import tarfile
+import tempfile
+import zlib
 
-from exceptions import PayloadTooLargeError
+from exceptions import ExtractionError, PayloadTooLargeError
 
 # --- Límites de tamaño (Sección 6 del Entregable 1) -------------------------
 
@@ -54,7 +57,7 @@ def pack_source(path: str) -> bytes:
             f"excede el umbral preliminar de {PRELIMINARY_SIZE_HINT} bytes."
         )
 
-    arcname = os.path.basename(os.path.normpath(path))
+    arcname = os.path.basename(os.path.abspath(path))
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as tar:
         tar.add(path, arcname=arcname)
@@ -72,29 +75,62 @@ def pack_source(path: str) -> bytes:
 def unpack_output(payload: bytes, output_dir: str) -> None:
     """Extrae un stream tar+gzip descifrado hacia `output_dir`.
 
-    Preserva estructura de directorios, nombres y permisos originales.
+    Preserva la estructura de directorios, los nombres y los bits de
+    ejecución de los archivos originales.
 
-    Nota de seguridad: se usa el filtro "data" de tarfile (disponible desde
-    Python 3.12), que rechaza rutas absolutas, symlinks peligrosos y
-    entradas de path traversal (p. ej. "../../etc/passwd"). En versiones
-    anteriores de Python, ese filtro no existe y la extracción se realiza
-    sin esa protección adicional; el riesgo residual en ese caso se
-    considera bajo porque el payload ya fue autenticado por AEAD antes de
-    llegar aquí, pero no es una garantía formal (ver Sección 6 del
-    Entregable 1).
+    La extracción es "todo o nada":
+        1. Se valida cada entrada del tar ANTES de escribir nada.
+        2. Se extrae en un directorio temporal dentro de `output_dir`.
+        3. Solo si todo salió bien, se mueven las entradas al destino.
+    Si algo falla, se borra el directorio temporal y `output_dir` queda
+    exactamente como estaba (nunca hay restauraciones a medias).
+
+    Nota de seguridad: se usa el filtro "data" de tarfile (Python 3.12+ y
+    parches de seguridad de 3.8-3.11), que rechaza rutas absolutas, symlinks
+    peligrosos y path traversal (p. ej. "../../etc/passwd"). Además, este
+    módulo hace su propia validación (_check_member), de modo que la
+    protección no depende solo de la versión de Python instalada.
 
     Args:
-        payload: bytes del stream tar+gzip (ya descifrado).
+        payload: bytes del stream tar+gzip (ya descifrado y autenticado).
         output_dir: directorio donde se extraerá el contenido. Se crea
             si no existe.
+
+    Raises:
+        ExtractionError: si el tar/gzip está dañado, contiene entradas
+            peligrosas, o alguna entrada ya existe en `output_dir`
+            (no se sobrescriben archivos del usuario).
     """
     os.makedirs(output_dir, exist_ok=True)
-    buffer = io.BytesIO(payload)
-    with tarfile.open(fileobj=buffer, mode="r:gz") as tar:
-        if hasattr(tarfile, "data_filter"):
-            tar.extractall(path=output_dir, filter="data")
-        else:  # pragma: no cover - solo en Python < 3.12
-            tar.extractall(path=output_dir)
+    staging = tempfile.mkdtemp(prefix=".restaurando-", dir=output_dir)
+    try:
+        try:
+            with tarfile.open(fileobj=io.BytesIO(payload), mode="r:gz") as tar:
+                members = tar.getmembers()
+                for member in members:
+                    _check_member(member)
+                if hasattr(tarfile, "data_filter"):
+                    tar.extractall(path=staging, members=members, filter="data")
+                else:  # pragma: no cover - solo en Python sin el filtro "data"
+                    tar.extractall(path=staging, members=members)
+        except ExtractionError:
+            raise
+        except (tarfile.TarError, EOFError, zlib.error, OSError) as exc:
+            raise ExtractionError(
+                f"No se pudo extraer el contenido restaurado: {exc}"
+            ) from exc
+
+        entries = os.listdir(staging)
+        conflicts = [e for e in entries if os.path.lexists(os.path.join(output_dir, e))]
+        if conflicts:
+            raise ExtractionError(
+                "El destino ya contiene: " + ", ".join(sorted(conflicts))
+                + ". Elija un directorio vacío; no se sobrescriben archivos."
+            )
+        for entry in entries:
+            os.replace(os.path.join(staging, entry), os.path.join(output_dir, entry))
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 # --- Helpers internos --------------------------------------------------------
@@ -112,3 +148,27 @@ def _get_size_recursive(path: str) -> int:
                 continue
             total += os.path.getsize(file_path)
     return total
+
+
+def _check_member(member: tarfile.TarInfo) -> None:
+    """Rechaza entradas del tar que podrían escribir fuera del destino.
+
+    Es una segunda barrera, independiente del filtro "data" de tarfile,
+    para que la extracción sea segura en cualquier versión de Python.
+    """
+    name = member.name
+    parts = name.replace("\\", "/").split("/")
+    if name.startswith(("/", "\\")) or os.path.isabs(name) or (len(name) > 1 and name[1] == ":"):
+        raise ExtractionError(f"Entrada con ruta absoluta rechazada: {name!r}")
+    if ".." in parts:
+        raise ExtractionError(f"Entrada con '..' rechazada: {name!r}")
+    if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+        raise ExtractionError(f"Tipo de entrada no permitido (dispositivo/FIFO): {name!r}")
+    if member.issym() or member.islnk():
+        target = member.linkname
+        if target.startswith(("/", "\\")) or os.path.isabs(target):
+            raise ExtractionError(f"Enlace con destino absoluto rechazado: {name!r}")
+        base = os.path.dirname(name) if member.issym() else ""
+        resolved = os.path.normpath(os.path.join(base, target))
+        if resolved == ".." or resolved.startswith(".." + os.sep) or resolved.startswith("../"):
+            raise ExtractionError(f"Enlace que sale del destino rechazado: {name!r}")
