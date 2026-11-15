@@ -1,0 +1,10 @@
+# --- Entornos virtuales ---
+venv/
+
+# --- Python compilado / cache ---
+__pycache__/
+
+# --- pytest ---
+.pytest_cache/
+
+
