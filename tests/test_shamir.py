@@ -3,7 +3,7 @@ import os
 import random
 import sys
 
-import pytest
+import pytest # type: ignore
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
