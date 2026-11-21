@@ -14,6 +14,7 @@ El orquestador **no hace criptografía**: llama en orden a los módulos de A, B 
 | `create_backup(input_path, output_dir) -> str` | Crea el respaldo y devuelve el `backup_id` |
 | `restore_backup(share_paths, output_path) -> list[tuple[str, str]]` | Restaura y devuelve las participaciones descartadas `[(ruta, motivo)]` |
 | `inspect(path) -> dict` | Metadatos no secretos de una participación, un manifiesto o un paquete `.evlp` |
+| `check_share_group(paths) -> dict` | Revisa un grupo de participaciones: mezcla de respaldos, índices repetidos, dañadas y si se alcanza el umbral |
 
 ### Excepciones
 
@@ -53,6 +54,7 @@ python src/cli.py inspeccionar ARCHIVO [ARCHIVO ...]
 - Código de salida 0 si todo salió bien y 1 si hubo error. Los errores se muestran en una línea, sin traceback.
 - Al restaurar se informa cada participación descartada con su motivo (`dañada`, `duplicada`, `de otro respaldo`), nunca su valor.
 - `inspeccionar` nunca muestra el campo `value` ni la clave; para un `.evlp` solo lee el encabezado.
+- Con varios archivos, `inspeccionar` agrega una **revisión del grupo** (`check_share_group`): advierte si se mezclan participaciones de respaldos distintos, si un índice está repetido (con `find_duplicate_indices` de formatos) o si alguna está dañada, y dice si cada respaldo alcanza el umbral de 3. Un archivo inválido se informa y no detiene la revisión de los demás.
 
 ## 4. La clave solo en memoria
 
@@ -89,6 +91,7 @@ python demo/demo.py
 
 - `restore_backup` devuelve la lista de participaciones descartadas en lugar de `None`, para que la CLI pueda informarlas aunque la restauración salga bien.
 - `inspect` también acepta el paquete `.evlp` (muestra solo su encabezado).
+- Se agregó `check_share_group` para que el inspector detecte índices duplicados y mezcla de respaldos, como pide el enunciado; en la entrega 1 esa detección solo estaba prevista durante la restauración.
 - El guion de demostración es `demo/demo.py` en lugar de `demo.sh`, para que funcione igual en Windows, Linux y macOS.
 
 ## 7. Limitaciones conocidas

@@ -43,14 +43,34 @@ def cmd_restaurar(args: argparse.Namespace) -> None:
     print(f"Respaldo restaurado en: {args.destino}")
 
 
-def cmd_inspeccionar(args: argparse.Namespace) -> None:
+def cmd_inspeccionar(args: argparse.Namespace) -> int:
+    errores = 0
     for i, path in enumerate(args.archivos):
         if i > 0:
             print()
-        info = orchestrator.inspect(path)
         print(f"== {path}")
+        try:
+            info = orchestrator.inspect(path)
+        except (ValueError, EnvelopeError, OSError) as exc:
+            # Un archivo malo no detiene la revisión de los demás.
+            print(f"  Error: {exc}")
+            errores += 1
+            continue
         for key, value in info.items():
             print(f"  {key}: {value}")
+
+    # Con varios archivos, además se revisan las participaciones como grupo.
+    if len(args.archivos) > 1:
+        grupo = orchestrator.check_share_group(args.archivos)
+        print()
+        print("== Revisión del grupo de participaciones")
+        for linea in grupo["resumen"]:
+            print(f"  {linea}")
+        for linea in grupo["advertencias"]:
+            print(f"  ADVERTENCIA: {linea}")
+        if not grupo["advertencias"]:
+            print("  Sin advertencias.")
+    return 1 if errores else 0
 
 
 def _print_rejected(rejected: list[tuple[str, str]], file=None) -> None:
@@ -75,8 +95,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--destino", required=True, help="Carpeta donde se extrae el contenido.")
     p.set_defaults(func=cmd_restaurar)
 
-    p = sub.add_parser("inspeccionar", help="Muestra metadatos no secretos de un archivo del respaldo.")
-    p.add_argument("archivos", nargs="+", help="Participación, manifiesto o paquete (.evlp).")
+    p = sub.add_parser(
+        "inspeccionar",
+        help="Muestra metadatos no secretos; con varias participaciones avisa de índices repetidos y mezclas.",
+    )
+    p.add_argument("archivos", nargs="+", help="Participaciones, manifiesto o paquete (.evlp).")
     p.set_defaults(func=cmd_inspeccionar)
 
     return parser
@@ -85,12 +108,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        args.func(args)
+        codigo = args.func(args)
     except (orchestrator.RestoreError, EnvelopeError, ValueError, OSError) as exc:
         # FormatError y los errores de shamir heredan de ValueError.
         print(f"Error: {exc}", file=sys.stderr)
         return 1
-    return 0
+    return codigo or 0  # crear y restaurar no devuelven nada; inspeccionar sí
 
 
 if __name__ == "__main__":
