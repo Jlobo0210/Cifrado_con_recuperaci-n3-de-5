@@ -528,3 +528,78 @@ def test_cli_inspeccionar_no_muestra_el_valor(capsys, respaldo):
 def test_cli_origen_inexistente(tmp_path, capsys):
     assert cli.main(["crear", str(tmp_path / "no_existe"), "-o", str(tmp_path / "r")]) == 1
     assert "Error:" in capsys.readouterr().err
+
+
+# --- Inspector: revisión de un grupo de participaciones ---------------------------
+
+
+def test_inspector_grupo_sano_alcanza_el_umbral(respaldo):
+    _origen, _carpeta, bid, shares = respaldo
+    grupo = orq.check_share_group(shares[:3])
+    assert grupo["advertencias"] == []
+    assert grupo["resumen"] == [
+        f"Respaldo {bid}: índices [1, 2, 3]; alcanza el umbral de 3."
+    ]
+
+
+def test_inspector_grupo_detecta_indice_repetido(respaldo):
+    _origen, carpeta, _bid, shares = respaldo
+    copia = str(carpeta / "copia_share2.json")
+    shutil.copy(shares[1], copia)
+    grupo = orq.check_share_group([shares[0], shares[1], copia])
+    assert len(grupo["advertencias"]) == 1
+    assert "Índice 2 repetido en 2 archivos" in grupo["advertencias"][0]
+    assert "NO alcanza" in grupo["resumen"][0]  # solo hay 2 índices distintos
+
+
+def test_inspector_grupo_advierte_mezcla_de_respaldos(tmp_path):
+    origen = _crear_origen(tmp_path)
+    _ca, bid_a, shares_a = _crear_respaldo(tmp_path, origen, "a")
+    _cb, bid_b, shares_b = _crear_respaldo(tmp_path, origen, "b")
+    grupo = orq.check_share_group(shares_a[:3] + shares_b[:1])
+    assert any("2 respaldos distintos" in a for a in grupo["advertencias"])
+    assert len(grupo["resumen"]) == 2
+    assert any(bid_a in linea and "alcanza el umbral" in linea for linea in grupo["resumen"])
+    assert any(bid_b in linea and "NO alcanza" in linea for linea in grupo["resumen"])
+
+
+def test_inspector_grupo_advierte_danada_e_ignora_otros_archivos(respaldo):
+    _origen, carpeta, bid, shares = respaldo
+    _editar_json(shares[0], lambda d: d.update(value="00" + "11" * 65))
+    grupo = orq.check_share_group([
+        shares[0], shares[1], shares[2],
+        str(carpeta / fm.manifest_filename(bid)),
+        str(carpeta / fm.package_filename(bid)),
+    ])
+    assert grupo["advertencias"] == [
+        f"Participación dañada (el checksum no coincide): {shares[0]}"
+    ]
+    assert "NO alcanza" in grupo["resumen"][0]
+
+
+def test_inspector_grupo_no_revela_valores(respaldo):
+    _origen, _carpeta, _bid, shares = respaldo
+    grupo = orq.check_share_group(shares)
+    texto = str(grupo)
+    for path in shares:
+        assert fm.read_share(path).value.hex() not in texto
+
+
+def test_cli_inspeccionar_grupo_muestra_advertencias(capsys, respaldo):
+    _origen, carpeta, _bid, shares = respaldo
+    copia = str(carpeta / "copia_share1.json")
+    shutil.copy(shares[0], copia)
+    assert cli.main(["inspeccionar", shares[0], copia, shares[1]]) == 0
+    out = capsys.readouterr().out
+    assert "== Revisión del grupo de participaciones" in out
+    assert "ADVERTENCIA: Índice 1 repetido" in out
+
+
+def test_cli_inspeccionar_sigue_si_un_archivo_es_invalido(tmp_path, capsys, respaldo):
+    _origen, _carpeta, _bid, shares = respaldo
+    malo = tmp_path / "malo.json"
+    malo.write_text("no es JSON", encoding="utf-8")
+    assert cli.main(["inspeccionar", str(malo), shares[0]]) == 1
+    out = capsys.readouterr().out
+    assert "Error:" in out
+    assert "index: 1" in out  # el segundo archivo sí se inspeccionó

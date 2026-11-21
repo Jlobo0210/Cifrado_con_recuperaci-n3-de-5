@@ -248,3 +248,51 @@ def inspect(path: str) -> dict:
         info["type"] = "package"
         return info
     return fm.inspect_file(path)
+
+
+def check_share_group(paths: list[str]) -> dict:
+    """Revisa un grupo de participaciones sin reconstruir la clave.
+
+    Es la parte del inspector que mira las participaciones en conjunto:
+    advierte si se mezclan respaldos distintos, si hay índices repetidos y si
+    alguna está dañada, y dice si cada respaldo alcanza el umbral. Solo usa
+    metadatos no secretos; nunca muestra el valor de una participación.
+    Los archivos que no son participaciones (manifiesto, paquete) se ignoran.
+
+    Returns:
+        {"resumen": [líneas informativas], "advertencias": [líneas de alerta]}
+    """
+    shares: list[tuple[str, fm.ShareFile]] = []
+    advertencias: list[str] = []
+    for path in paths:
+        try:
+            info = fm.inspect_file(path)
+        except (fm.FormatError, OSError):
+            continue  # no es una participación legible: ya se informa por archivo
+        if info["type"] != "share":
+            continue
+        if not info["checksum_ok"]:
+            advertencias.append(f"Participación dañada (el checksum no coincide): {path}")
+            continue
+        shares.append((path, fm.read_share(path)))
+
+    backup_ids = sorted({share.backup_id for _, share in shares})
+    if len(backup_ids) > 1:
+        advertencias.append(
+            f"Se mezclan participaciones de {len(backup_ids)} respaldos distintos; "
+            "solo las del mismo respaldo sirven juntas."
+        )
+
+    resumen: list[str] = []
+    for backup_id in backup_ids:
+        del_respaldo = [share for _, share in shares if share.backup_id == backup_id]
+        for index in fm.find_duplicate_indices(del_respaldo):
+            rutas = [p for p, s in shares if s.backup_id == backup_id and s.index == index]
+            advertencias.append(f"Índice {index} repetido en {len(rutas)} archivos: {', '.join(rutas)}")
+        indices = sorted({share.index for share in del_respaldo})
+        alcanza = "alcanza" if len(indices) >= fm.THRESHOLD else "NO alcanza"
+        resumen.append(
+            f"Respaldo {backup_id}: índices {indices}; "
+            f"{alcanza} el umbral de {fm.THRESHOLD}."
+        )
+    return {"resumen": resumen, "advertencias": advertencias}
