@@ -5,7 +5,7 @@ Proyecto 3 de Criptografía Aplicada. Un archivo o directorio se cifra con **Cha
 ## Requisitos
 
 - Python 3.10 o superior (se recomienda 3.12, que incluye el filtro `data` de `tarfile`).
-- Dependencias: `cryptography` y `pytest`.
+- Dependencias fijadas en `requirements.txt`: `cryptography==50.0.2` y `pytest==9.2.0` (con estas versiones se ejecutaron todas las pruebas y experimentos).
 
 ```bash
 python -m venv venv
@@ -40,13 +40,19 @@ Para ver los metadatos de un archivo sin revelar ningún secreto:
 python src/cli.py inspeccionar respaldo/<id>.share2.json
 ```
 
+Con varias participaciones, el inspector además avisa si hay índices repetidos o participaciones de otro respaldo, y dice si alcanzan para restaurar:
+
+```bash
+python src/cli.py inspeccionar respaldo/<id>.share1.json respaldo/<id>.share2.json otra_carpeta/<otro_id>.share3.json
+```
+
 ## Demostración
 
 ```bash
 python demo/demo.py
 ```
 
-Reparte las participaciones entre 5 custodios simulados y prueba las 10 combinaciones de 3, solo 2 custodios, una participación repetida, una dañada, una de otro respaldo y un paquete manipulado. Los archivos quedan en `demo/salida_demo/`.
+Reparte las participaciones entre 5 custodios simulados y prueba las 10 combinaciones de 3, solo 2 custodios, una participación repetida, una dañada, una de otro respaldo, un paquete manipulado y la revisión de un grupo con el inspector. Los archivos quedan en `demo/salida_demo/`.
 
 ## Pruebas y experimentos
 
