@@ -8,3 +8,9 @@ __pycache__/
 .pytest_cache/
 
 .DS_Store
+
+# --- Entorno virtual creado por VS Code ---
+.venv/
+
+# --- Salida de la demostración ---
+demo/salida_demo/
