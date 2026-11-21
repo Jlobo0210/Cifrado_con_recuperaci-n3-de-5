@@ -1,0 +1,16 @@
+# --- Entornos virtuales ---
+venv/
+
+# --- Python compilado / cache ---
+__pycache__/
+
+# --- pytest ---
+.pytest_cache/
+
+.DS_Store
+
+# --- Entorno virtual creado por VS Code ---
+.venv/
+
+# --- Salida de la demostración ---
+demo/salida_demo/
