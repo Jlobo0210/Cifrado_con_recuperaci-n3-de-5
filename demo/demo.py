@@ -15,6 +15,8 @@ Qué hace:
          - un custodio que entrega una participación de otro respaldo,
          - un paquete cifrado manipulado.
     4. Inspecciona una participación sin revelar su valor.
+    5. Inspecciona un grupo de participaciones: avisa de índices repetidos y
+    de la mezcla de respaldos antes de intentar restaurar.
 
 Se usa la CLI real (cli.main), así que la salida es la misma que vería un
 usuario en la terminal. Todo se escribe en demo/salida_demo/ (se borra al
@@ -171,6 +173,11 @@ def main():
 
     titulo("9. Inspeccionar una participación (el valor nunca se muestra)")
     ejecutar("inspeccionar", share_de(bid, 4))
+
+    
+    titulo("10. Inspeccionar un grupo antes de restaurar (repetida y de otro respaldo)")
+    repetida = os.path.join(TRABAJO, "mesas", "repetida", f"entrega2_{fm.share_filename(bid, 1)}")
+    ejecutar("inspeccionar", share_de(bid, 1), repetida, share_de(bid, 3), ajena)
 
     print()
     print(f"Fin de la demostración. Archivos generados en: {TRABAJO}")
