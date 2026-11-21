@@ -66,12 +66,12 @@ Las pruebas lentas (~200 MB) se activan con la variable `EVLP_SLOW_TESTS=1`. Los
 
 | Ruta | Responsable | Contenido |
 |---|---|---|
-| `src/crypto_core.py`, `src/packaging_.py`, `src/exceptions.py` | Persona A | Cifrado AEAD y empaquetado tar+gzip |
-| `src/shamir.py` | Persona B | Shamir 3-de-5 sobre Z_p, p = 2^521 − 1 |
-| `src/formats.py` | Persona C | Manifiesto, participaciones, paquete y checksums |
-| `src/orchestrator.py`, `src/cli.py` | Persona D | Flujo completo, CLI e inspector |
+| `src/crypto_core.py`, `src/packaging_.py`, `src/exceptions.py` | Joshua Lobo | Cifrado AEAD y empaquetado tar+gzip |
+| `src/shamir.py` | Laura González | Shamir 3-de-5 sobre Z_p, p = 2^521 − 1 |
+| `src/formats.py` | Kesly Rodríguez | Manifiesto, participaciones, paquete y checksums |
+| `src/orchestrator.py`, `src/cli.py` | Santiago Vengoechea | Flujo completo, CLI e inspector |
 | `tests/` | Todos | Pruebas unitarias y de integración |
-| `demo/demo.py` | Persona D | Guion de demostración |
+| `demo/demo.py` | Santiago Vengoechea | Guion de demostración |
 | `docs/` | Todos | Documentación de cada módulo |
 
 Más detalle en `docs/cifrado_envolvente.md`, `docs/shamir.md`, `docs/formatos.md` y `docs/orquestacion.md`.
